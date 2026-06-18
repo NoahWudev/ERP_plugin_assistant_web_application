@@ -1,0 +1,30 @@
+---
+description: 敏感資訊保護與 Git 忽略規範
+alwaysApply: true
+---
+
+# 安全與 Git 忽略規範
+
+遵守 `.gitignore`，**嚴禁提交**以下內容：
+
+## 依賴與建置產出
+
+- `node_modules/`
+- `dist/`、`build/`、`dist-ssr/`、`*.local`
+- `.next/`、`out/`（預留給未來可能的 Next.js 遷移）
+
+## Python 後端環境（未來實作時適用）
+
+- `.venv/`、`venv/`、`env/`
+- `__pycache__/`、`*.py[cod]`
+- `.pytest_cache/`、`.mypy_cache/`、`.ruff_cache/`
+
+## 敏感設定
+
+- `.env`、`.env.local`、`.env*.local`（含 API Key、MSSQL 連線字串等）
+- 僅允許提交 `.env.example` 作為範本
+
+## 系統與日誌
+
+- `.DS_Store`、`Thumbs.db`
+- `*.log`、`npm-debug.log*`

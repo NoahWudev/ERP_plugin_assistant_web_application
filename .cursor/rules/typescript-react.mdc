@@ -1,0 +1,35 @@
+---
+description: TypeScript 與 React 元件編寫規範
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript & React 規範
+
+## 型別
+
+- 必須聲明明確的型別、Interface 或 Type Alias
+- **禁止使用 `any`**（隱式或顯式皆不允許）
+- 型別定義優先放在 `src/types.ts` 或元件同目錄
+
+## React 元件
+
+- 使用**函數式元件**與**箭頭函式**
+- 遵循 `src/` 既有元件結構與命名風格
+
+## 樣式 (Tailwind CSS)
+
+- UI 必須以 Tailwind utility classes 實作 RWD
+- **禁止 inline style**（`style={{...}}`），除非運行時動態數值（拖曳座標、動態高度等）
+- 禁止未經允許引入第三方 UI 庫（Ant Design、Material UI 等）
+- 圖示使用 Lucide React
+
+## 註解
+
+- 修改或重構時**不得刪除既有註解**（授權聲明、邏輯說明等）
+
+## 靜態檢查
+
+- 目前專案尚無 ESLint / Prettier 設定
+- 遵循既有程式風格，確保 `npm run lint`（`tsc --noEmit`）通過
+- 若未來加入 lint 工具，再更新本規則

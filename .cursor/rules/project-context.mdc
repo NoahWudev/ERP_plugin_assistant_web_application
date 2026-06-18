@@ -1,0 +1,35 @@
+---
+description: ERP 報價助手專案背景、現況技術棧與未來架構方向
+alwaysApply: true
+---
+
+# ERP 報價快速打單助手
+
+輕量化報價單管理系統：離線自動存檔、品項動態編輯、即時金額計算、Excel 匯出與 PDF/列印。
+
+## 現況技術棧（以此為準開發）
+
+- **前端**：React 19 + TypeScript + Vite 6
+- **樣式**：Tailwind CSS v4（`@tailwindcss/vite`）
+- **工具庫**：SheetJS (`xlsx`)、Lucide React、Motion
+- **狀態管理**：React 元件內 state（`src/App.tsx`），尚未使用 Zustand
+- **開發**：`npm install` → `npm run dev`（port 3000，需 Node.js >= 20）
+
+## 關鍵目錄
+
+- `src/App.tsx` — 主頁面與狀態管理
+- `src/components/` — UI 元件
+- `src/utils/` — Excel 匯出、預設資料等工具
+- `src/types.ts` — 全域 TypeScript 型別
+
+## 未來架構（尚未實作，勿假設已存在）
+
+- **後端**：Python，負責核心運算、資料處理與 API
+- **資料庫**：Microsoft SQL Server（MSSQL）串接
+- 開始實作前須經 Noah 同意，並提供移轉計畫；不得擅自引入 Next.js、Zustand 或後端程式碼
+- 後端目錄建議預留 `backend/` 或 `api/`，Python 使用 `.venv/` 虛擬環境
+
+## AI 作業原則
+
+- 產出可實際運作的完整邏輯，不使用 `TODO` 或 placeholder
+- 修改範圍最小化，不更動與任務無關的程式碼
