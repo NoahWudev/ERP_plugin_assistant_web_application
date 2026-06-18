@@ -13,11 +13,12 @@ alwaysApply: true
 - `dist/`、`build/`、`dist-ssr/`、`*.local`
 - `.next/`、`out/`（預留給未來可能的 Next.js 遷移）
 
-## Python 後端環境（未來實作時適用）
+## Python 後端環境（未來實作時適用，以 uv 管理）
 
-- `.venv/`、`venv/`、`env/`
+- `.venv/`（`uv venv` 預設目錄）、`venv/`、`env/`
 - `__pycache__/`、`*.py[cod]`
 - `.pytest_cache/`、`.mypy_cache/`、`.ruff_cache/`
+- **可提交**：`pyproject.toml`、`uv.lock`、`.python-version`
 
 ## 敏感設定
 

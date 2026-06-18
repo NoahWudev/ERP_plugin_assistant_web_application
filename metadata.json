@@ -1,6 +1,4 @@
 {
   "name": "ERP 報價單助手",
-  "description": "為業務量身打造的友善報價單打單系統，支援品項動態增減、自動金額運算與一鍵匯出 Excel 格式",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "輕量化報價單管理系統，支援品項動態編輯、即時金額計算與 Excel 匯出"
 }

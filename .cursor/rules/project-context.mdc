@@ -13,7 +13,7 @@ alwaysApply: true
 - **樣式**：Tailwind CSS v4（`@tailwindcss/vite`）
 - **工具庫**：SheetJS (`xlsx`)、Lucide React、Motion
 - **狀態管理**：React 元件內 state（`src/App.tsx`），尚未使用 Zustand
-- **開發**：`npm install` → `npm run dev`（port 3000，需 Node.js >= 20）
+- **開發**：`nvm use` → `npm install` → `npm run dev`（port 3000，需 Node.js >= 20，見 `.nvmrc`）
 
 ## 關鍵目錄
 
@@ -27,7 +27,7 @@ alwaysApply: true
 - **後端**：Python，負責核心運算、資料處理與 API
 - **資料庫**：Microsoft SQL Server（MSSQL）串接
 - 開始實作前須經 Noah 同意，並提供移轉計畫；不得擅自引入 Next.js、Zustand 或後端程式碼
-- 後端目錄建議預留 `backend/` 或 `api/`，Python 使用 `.venv/` 虛擬環境
+- 後端目錄建議預留 `backend/` 或 `api/`，Python 環境以 **uv** 管理（`uv venv` → `uv sync` / `uv run`）
 
 ## AI 作業原則
 

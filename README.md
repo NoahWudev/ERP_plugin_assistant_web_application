@@ -45,29 +45,16 @@
 ## 📦 本地開發與運行 (Local Development)
 
 ### 1. 先決條件
-- **Node.js**：推薦使用 `v20.0.0` 或更高版本。
-- **npm**：Node.js 隨附之套件管理器。
+- **Node.js**：`v20.0.0` 或更高版本（專案根目錄含 `.nvmrc`，建議使用 nvm）
+- **npm**：Node.js 隨附之套件管理器
 
 ### 2. 安裝步驟
 在專案根目錄下依序執行：
 
 ```bash
-# 1. 複製環境變數範例（若有需要設定 API 金鑰）
-cp .env.example .env.local
-
-# 2. 安裝所有相依套件
+nvm use
 npm install
 ```
-
-> [!IMPORTANT]
-> **WSL / Linux Node v18 環境安裝注意：**
-> 本專案使用的 Tailwind CSS v4 原生編譯器 (`@tailwindcss/oxide`) 需要 Node.js `>= 20`。
-> 若您的本機環境為 **Node v18**，執行 `npm install` 時可能會跳過該原生編譯器的安裝，導致啟動伺服器時報錯 `Cannot find native binding`。
-> 
-> **排除方式：** 請手動執行以下指令安裝適用於 Linux x64 的原生編譯包：
-> ```bash
-> npm install @tailwindcss/oxide-linux-x64-gnu
-> ```
 
 ### 3. 啟動開發伺服器
 ```bash
