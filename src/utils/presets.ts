@@ -36,7 +36,7 @@ export const DEFAULT_CUSTOMERS: CustomerPreset[] = [
     email: 'm.wang@dayi-info.com.tw',
     taxId: '98761234',
     address: '台南市安南科工區科技一路 12 號',
-  },
+  }
 ];
 
 export const DEFAULT_PRODUCTS: ProductPreset[] = [

@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Quotation, QuotationItem, CustomerPreset, ProductPreset, TaxType } from './types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Quotation, QuotationItem, CustomerPreset, ProductPreset, ErpProduct, TaxType } from './types';
 import { 
   Plus, Trash, ArrowUp, ArrowDown, Save, FileSpreadsheet, Printer, 
   RotateCcw, Building, FileText, Check, PlusCircle, 
   AlertCircle, Phone, Mail, User, MapPin, Hash, Calendar, 
   HelpCircle, Info, ChevronRight, Contact, DollarSign, Edit3, FolderOpen
 } from 'lucide-react';
-import { calculateQuotationTotals, exportQuotationToExcel } from './utils/excel';
+import { exportQuotationToExcel } from './utils/excel';
+import { calculateQuotationTotals } from './utils/quotationTotals';
 import { 
   DEFAULT_CUSTOMERS, DEFAULT_PRODUCTS, DEFAULT_QUOTATION_TEMPLATE, generateQuotationNo 
 } from './utils/presets';
@@ -21,6 +22,22 @@ import ProductAutocomplete from './components/ProductAutocomplete';
 import DraftList from './components/DraftList';
 import QuotationPrint from './components/QuotationPrint';
 import QuotationHistory from './components/QuotationHistory';
+
+/** 品項表格預設可視高度（約先前一半） */
+const ITEMS_TABLE_DEFAULT_HEIGHT = 200;
+const ITEMS_TABLE_ROW_HEIGHT = 46;
+const ITEMS_TABLE_HEAD_HEIGHT = 42;
+const ITEMS_TABLE_MAX_HEIGHT = 460;
+const ITEMS_TABLE_DEFAULT_VISIBLE_ROWS = 3;
+
+function getItemsTableScrollHeight(itemCount: number): number {
+  if (itemCount === 0) return ITEMS_TABLE_DEFAULT_HEIGHT;
+  const contentHeight = ITEMS_TABLE_HEAD_HEIGHT + itemCount * ITEMS_TABLE_ROW_HEIGHT;
+  const defaultCapacity =
+    ITEMS_TABLE_HEAD_HEIGHT + ITEMS_TABLE_DEFAULT_VISIBLE_ROWS * ITEMS_TABLE_ROW_HEIGHT;
+  if (contentHeight <= defaultCapacity) return ITEMS_TABLE_DEFAULT_HEIGHT;
+  return Math.min(contentHeight, ITEMS_TABLE_MAX_HEIGHT);
+}
 
 export default function App() {
   // --- Persistent States ---
@@ -58,8 +75,65 @@ export default function App() {
 
   // --- UI States ---
   const [activeMainTab, setActiveMainTab] = useState<'editor' | 'history'>('editor');
-  const [activeRightTab, setActiveRightTab] = useState<'customers' | 'products' | 'drafts'>('products');
+  const [activeMetaRightTab, setActiveMetaRightTab] = useState<'customers' | 'drafts'>('customers');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const itemsEditorCardRef = useRef<HTMLDivElement>(null);
+  const basicInfoCardRef = useRef<HTMLDivElement>(null);
+  const [itemsEditorCardHeight, setItemsEditorCardHeight] = useState<number | null>(null);
+  const [basicInfoCardHeight, setBasicInfoCardHeight] = useState<number | null>(null);
+
+  const itemsTableScrollHeight = useMemo(
+    () => getItemsTableScrollHeight(quotation.items.length),
+    [quotation.items.length]
+  );
+
+  // 品項快選側欄高度跟隨報價品項編輯清單卡片（桌面版）
+  useEffect(() => {
+    const el = itemsEditorCardRef.current;
+    if (!el || activeMainTab !== 'editor') return;
+
+    const syncHeight = () => {
+      if (window.innerWidth >= 1024) {
+        setItemsEditorCardHeight(el.offsetHeight);
+      } else {
+        setItemsEditorCardHeight(null);
+      }
+    };
+
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(el);
+    window.addEventListener('resize', syncHeight);
+    syncHeight();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncHeight);
+    };
+  }, [activeMainTab, quotation.items.length, quotation.remark, itemsTableScrollHeight]);
+
+  // 客戶儲藏側欄高度跟隨基本報價資訊卡片（桌面版）
+  useEffect(() => {
+    const el = basicInfoCardRef.current;
+    if (!el || activeMainTab !== 'editor') return;
+
+    const syncHeight = () => {
+      if (window.innerWidth >= 1024) {
+        setBasicInfoCardHeight(el.offsetHeight);
+      } else {
+        setBasicInfoCardHeight(null);
+      }
+    };
+
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(el);
+    window.addEventListener('resize', syncHeight);
+    syncHeight();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncHeight);
+    };
+  }, [activeMainTab]);
 
   // Auto-save current progress so they never lose work
   useEffect(() => {
@@ -110,15 +184,16 @@ export default function App() {
   };
 
   // 3. Select pre-loaded catalog product and push to item stack
-  const handleAddProductToQuote = (product: ProductPreset, qty: number) => {
+  const handleAddProductToQuote = (product: ErpProduct, qty: number) => {
     const newItem: QuotationItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: product.name,
       spec: product.spec,
       qty: qty,
       unit: product.unit,
-      price: product.price,
-      subtotal: qty * product.price,
+      price: 0,
+      subtotal: 0,
+      remark: product.skuNo ? `品號：${product.skuNo}` : undefined,
     };
 
     setQuotation(prev => {
@@ -129,7 +204,7 @@ export default function App() {
         items: updatedItems
       };
     });
-    showToast(`已新增品項：${product.name} (共 ${qty} ${product.unit})`);
+    showToast(`已新增品項：${product.name}（單價請自行填寫）`);
   };
 
   // 4. Item Row manipulation
@@ -152,7 +227,7 @@ export default function App() {
     });
   };
 
-  const handleSelectAutocompleteProduct = (itemId: string, product: ProductPreset) => {
+  const handleSelectAutocompleteProduct = (itemId: string, product: ErpProduct) => {
     setQuotation(prev => {
       const updated = prev.items.map(item => {
         if (item.id === itemId) {
@@ -161,15 +236,16 @@ export default function App() {
             name: product.name,
             spec: product.spec,
             unit: product.unit,
-            price: product.price,
-            subtotal: item.qty * product.price,
+            price: 0,
+            subtotal: 0,
+            remark: product.skuNo ? `品號：${product.skuNo}` : item.remark,
           };
         }
         return item;
       });
       return { ...prev, items: updated };
     });
-    showToast(`已成功代入 SQL 品項「${product.name}」！`, 'success');
+    showToast(`已代入凌越貨品「${product.name}」（單價請自行填寫）`, 'success');
   };
 
   const handleAddNewBlankItem = () => {
@@ -285,12 +361,13 @@ export default function App() {
     showToast(`已載入單號 [${quote.quotationNo}]。修改完畢後可點選上方「儲存存檔」覆蓋或新增。`, 'success');
   };
 
-  const handleExportExcelHistory = (quote: Quotation) => {
+  const handleExportExcelHistory = async (quote: Quotation) => {
     try {
-      exportQuotationToExcel(quote);
+      await exportQuotationToExcel(quote);
       showToast(`歷史單號 ${quote.quotationNo} 匯出 Excel 成功！`, 'success');
     } catch (err) {
-      showToast('匯出失敗，請再試一次。', 'error');
+      const message = err instanceof Error ? err.message : '匯出失敗，請再試一次。';
+      showToast(message, 'error');
     }
   };
 
@@ -306,7 +383,7 @@ export default function App() {
   };
 
   // 7. Actions Bar
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (quotation.items.length === 0) {
       showToast('報價單品項不能為空，請先加入至少一項產品！', 'error');
       return;
@@ -316,10 +393,11 @@ export default function App() {
       return;
     }
     try {
-      exportQuotationToExcel(quotation);
+      await exportQuotationToExcel(quotation);
       showToast('Excel 報價單匯出成功且下載已觸發！', 'success');
     } catch (err) {
-      showToast('Excel 匯出失敗，請重試。', 'error');
+      const message = err instanceof Error ? err.message : 'Excel 匯出失敗，請重試。';
+      showToast(message, 'error');
     }
   };
 
@@ -458,13 +536,15 @@ export default function App() {
       {/* --- Main Dashboard Container --- */}
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 no-print" id="erp-main-content">
         {activeMainTab === 'editor' ? (
+          <div className="space-y-6" id="editor-layout">
+
+          {/* Row 1: 基本報價資訊 ↔ 客戶儲藏 / 暫存草稿 */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* ================= LEFT WRITING PANEL (65% width) ================= */}
-          <div className="lg:col-span-8 space-y-6" id="left-form-editor">
-            
-            {/* Form Sheet 1: Metadata Fields */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 space-y-6">
+            <div className="lg:col-span-8" id="basic-info-panel">
+            <div
+              ref={basicInfoCardRef}
+              className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 space-y-6"
+            >
               
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-2">
@@ -663,9 +743,81 @@ export default function App() {
               </div>
 
             </div>
+            </div>
 
+            <div
+              className="lg:col-span-4 min-h-0"
+              id="meta-presets-sidebar"
+              style={basicInfoCardHeight ? { height: basicInfoCardHeight } : undefined}
+            >
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 h-full flex flex-col min-h-0 overflow-hidden">
+                <div className="shrink-0 border-b border-slate-100 pb-4 mb-4">
+                  <div className="flex w-full bg-slate-200/60 p-1.5 rounded-xl border border-slate-200/80 items-center gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setActiveMetaRightTab('customers')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all cursor-pointer ${
+                        activeMetaRightTab === 'customers'
+                          ? 'bg-white text-slate-900 shadow-3xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      客戶儲藏
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveMetaRightTab('drafts')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all cursor-pointer relative ${
+                        activeMetaRightTab === 'drafts'
+                          ? 'bg-white text-slate-900 shadow-3xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      暫存草稿
+                      {drafts.length > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white scale-90">
+                          {drafts.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden" id="meta-presets-content">
+                  {activeMetaRightTab === 'customers' && (
+                    <CustomerPresetManager
+                      embedded
+                      presets={customerPresets}
+                      onSelect={handleSelectCustomer}
+                      onAdd={handleAddCustomerPreset}
+                      onDelete={handleDeleteCustomerPreset}
+                      selectedCustomerId={
+                        customerPresets.find(c => c.companyName === quotation.customerName)?.id
+                      }
+                    />
+                  )}
+
+                  {activeMetaRightTab === 'drafts' && (
+                    <DraftList
+                      embedded
+                      drafts={drafts}
+                      onLoadDraft={handleLoadDraft}
+                      onDeleteDraft={handleDeleteDraft}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: 報價品項編輯清單 ↔ 品項快選 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="lg:col-span-8" id="items-editor-panel">
             {/* Form Sheet 2: Items Table Editor */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 space-y-4">
+            <div
+              ref={itemsEditorCardRef}
+              className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 flex flex-col space-y-4"
+            >
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-100 gap-2">
                 <div className="flex items-center gap-2">
@@ -703,7 +855,11 @@ export default function App() {
               </div>
 
               {/* Items Table Grid Wrapper for Scrolling */}
-              <div className="overflow-x-auto -mx-6 sm:mx-0 min-h-[160px]" id="table-scroll-container">
+              <div
+                className="overflow-x-auto overflow-y-auto -mx-6 sm:mx-0 shrink-0 transition-[height] duration-200"
+                style={{ height: itemsTableScrollHeight }}
+                id="table-scroll-container"
+              >
                 <table className="w-full text-left min-w-[700px] border-collapse">
                   <thead>
                     <tr className="bg-slate-50 text-[11px] text-slate-400 uppercase font-bold tracking-wider border-b border-slate-200">
@@ -720,7 +876,7 @@ export default function App() {
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {quotation.items.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400 bg-slate-50/20 rounded-b-xl">
+                        <td colSpan={8} className="py-8 text-center text-slate-400 bg-slate-50/20 rounded-b-xl">
                           <AlertCircle className="w-5 h-5 mx-auto mb-2 text-slate-300" />
                           <p className="font-semibold text-slate-600">無任何報價品項</p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
@@ -764,7 +920,6 @@ export default function App() {
                               value={item.name}
                               onChange={(val) => handleItemCellChange(item.id, 'name', val)}
                               onSelectProduct={(product) => handleSelectAutocompleteProduct(item.id, product)}
-                              productPresets={productPresets}
                               placeholder="請輸入品項名稱"
                             />
                           </td>
@@ -844,7 +999,7 @@ export default function App() {
               </div>
 
               {/* General Remarks / Footnotes for quotation */}
-              <div className="pt-4 border-t border-slate-100">
+              <div className="pt-4 border-t border-slate-100 shrink-0">
                 <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center justify-between">
                   <span>報價條款暨備註欄位 (將列印於單據底部)</span>
                   <span className="text-[10px] text-slate-400">支援換行</span>
@@ -859,7 +1014,33 @@ export default function App() {
               </div>
 
             </div>
+            </div>
 
+            <div
+              className="lg:col-span-4 min-h-0"
+              id="product-presets-sidebar"
+              style={itemsEditorCardHeight ? { height: itemsEditorCardHeight } : undefined}
+            >
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 h-full flex flex-col min-h-0 overflow-hidden">
+                <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-100 gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>
+                    <h3 className="font-bold text-slate-900 text-sm tracking-wide">品項快選</h3>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <ProductPresetManager
+                    embedded
+                    onAddProductToQuote={handleAddProductToQuote}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: 自動結算與折讓 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-8">
             {/* Form Sheet 3: Calculation Summary Block */}
             <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6" id="calc-summary-section">
               <div className="w-full md:w-auto space-y-4">
@@ -924,87 +1105,6 @@ export default function App() {
               </div>
 
             </div>
-
-          </div>
-
-          {/* ================= RIGHT PRESETS SIDEBAR (35% width) ================= */}
-          <div className="lg:col-span-4 space-y-6" id="right-presets-sidebar">
-            
-            {/* Tab navigation headers */}
-            <div className="bg-slate-200/60 p-1.5 rounded-xl border border-slate-200/80 flex items-center gap-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveRightTab('products')}
-                className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all cursor-pointer ${
-                  activeRightTab === 'products'
-                    ? 'bg-white text-slate-900 shadow-3xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                品項快選
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setActiveRightTab('customers')}
-                className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all cursor-pointer ${
-                  activeRightTab === 'customers'
-                    ? 'bg-white text-slate-900 shadow-3xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                客戶儲藏
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveRightTab('drafts')}
-                className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all cursor-pointer relative ${
-                  activeRightTab === 'drafts'
-                    ? 'bg-white text-slate-900 shadow-3xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                暫存草稿
-                {drafts.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white scale-90">
-                    {drafts.length}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Tab Body rendering */}
-            <div className="transition-all duration-300">
-              {activeRightTab === 'products' && (
-                <ProductPresetManager
-                  presets={productPresets}
-                  onAddProductToQuote={handleAddProductToQuote}
-                  onAddPreset={handleAddProductPreset}
-                  onDeletePreset={handleDeleteProductPreset}
-                />
-              )}
-
-              {activeRightTab === 'customers' && (
-                <CustomerPresetManager
-                  presets={customerPresets}
-                  onSelect={handleSelectCustomer}
-                  onAdd={handleAddCustomerPreset}
-                  onDelete={handleDeleteCustomerPreset}
-                  // Identify if current state details match search preset
-                  selectedCustomerId={
-                    customerPresets.find(c => c.companyName === quotation.customerName)?.id
-                  }
-                />
-              )}
-
-              {activeRightTab === 'drafts' && (
-                <DraftList
-                  drafts={drafts}
-                  onLoadDraft={handleLoadDraft}
-                  onDeleteDraft={handleDeleteDraft}
-                />
-              )}
             </div>
           </div>
 

@@ -4,7 +4,7 @@ import {
   Search, Edit3, Trash2, FileSpreadsheet, Printer, Calendar, User, 
   Building, CheckCircle2, AlertTriangle, FileText, ChevronRight, TrendingUp, Info
 } from 'lucide-react';
-import { calculateQuotationTotals } from '../utils/excel';
+import { calculateQuotationTotals } from '../utils/quotationTotals';
 
 interface QuotationHistoryProps {
   history: Quotation[];

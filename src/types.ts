@@ -29,6 +29,14 @@ export interface ProductPreset {
   price: number;
 }
 
+/** 凌越 ERP 貨品主檔（000000）搜尋結果；不含單價 */
+export interface ErpProduct {
+  skuNo: string;
+  name: string;
+  spec: string;
+  unit: string;
+}
+
 export interface Quotation {
   id: string;
   quotationNo: string;   // 報價單號

@@ -98,7 +98,8 @@ erp-assistant/
 
 | 規則檔 | 用途 |
 | :--- | :--- |
-| `project-context.mdc` | 專案背景、現況技術棧、未來 Python + MSSQL 後端方向 |
+| `project-context.mdc` | 專案背景、現況技術棧、未來 Python + PostgreSQL 後端方向 |
+| `erp-integration-architecture.mdc` | 凌越 ERP 整合架構、資料歸屬與實作 Phase |
 | `typescript-react.mdc` | `src/` 下 TypeScript / React 編寫規範 |
 | `git-conventions.mdc` | Conventional Commits 提交格式 |
 | `security-gitignore.mdc` | 敏感資訊與 `.gitignore` 保護規範 |

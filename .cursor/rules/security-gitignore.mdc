@@ -1,8 +1,7 @@
 ---
 description: 敏感資訊保護與 Git 忽略規範
-alwaysApply: true
+alwaysApply: false
 ---
-
 # 安全與 Git 忽略規範
 
 遵守 `.gitignore`，**嚴禁提交**以下內容：
@@ -22,7 +21,7 @@ alwaysApply: true
 
 ## 敏感設定
 
-- `.env`、`.env.local`、`.env*.local`（含 API Key、MSSQL 連線字串等）
+- `.env`、`.env.local`、`.env*.local`（含 API Key、PostgreSQL 連線字串、凌越 SOAP 憑證等）
 - 僅允許提交 `.env.example` 作為範本
 
 ## 系統與日誌

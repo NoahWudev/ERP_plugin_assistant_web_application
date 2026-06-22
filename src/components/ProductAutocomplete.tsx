@@ -1,68 +1,131 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ProductPreset } from '../types';
-import { Database, Loader2, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { ErpProduct } from '../types';
+import { searchErpProducts } from '../utils/erpProducts';
+import { Database, Loader2 } from 'lucide-react';
 
 interface ProductAutocompleteProps {
   value: string;
   onChange: (val: string) => void;
-  onSelectProduct: (product: ProductPreset) => void;
-  productPresets: ProductPreset[];
+  onSelectProduct: (product: ErpProduct) => void;
   placeholder?: string;
+}
+
+interface DropdownRect {
+  top: number;
+  left: number;
+  width: number;
+}
+
+const DROPDOWN_MIN_WIDTH = 560;
+const DROPDOWN_VIEWPORT_MARGIN = 12;
+
+function computeDropdownRect(input: HTMLInputElement): DropdownRect {
+  const rect = input.getBoundingClientRect();
+  const width = Math.min(
+    Math.max(rect.width, DROPDOWN_MIN_WIDTH),
+    window.innerWidth - DROPDOWN_VIEWPORT_MARGIN * 2,
+  );
+  let left = rect.left;
+  if (left + width > window.innerWidth - DROPDOWN_VIEWPORT_MARGIN) {
+    left = Math.max(DROPDOWN_VIEWPORT_MARGIN, window.innerWidth - width - DROPDOWN_VIEWPORT_MARGIN);
+  }
+  return {
+    top: rect.bottom + 8,
+    left,
+    width,
+  };
 }
 
 export default function ProductAutocomplete({
   value,
   onChange,
   onSelectProduct,
-  productPresets,
-  placeholder = '請輸入品項名稱或關鍵字'
+  placeholder = '請輸入品項名稱或關鍵字',
 }: ProductAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<ProductPreset[]>([]);
+  const [suggestions, setSuggestions] = useState<ErpProduct[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dropdownRect, setDropdownRect] = useState<DropdownRect | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setIsOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Simulate SQL Database query on input change
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !inputRef.current) {
+      setDropdownRect(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      if (inputRef.current) {
+        setDropdownRect(computeDropdownRect(inputRef.current));
+      }
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen, suggestions.length, isLoading]);
+
   const triggerSearch = (searchTerm: string) => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
+    const query = searchTerm.trim();
+    if (!query) {
+      setSuggestions([]);
+      setError(null);
+      setIsLoading(false);
+      setHighlightedIndex(-1);
+      return;
+    }
+
     setIsLoading(true);
     setHighlightedIndex(-1);
+    setError(null);
 
-    // Simulate network delay of 250ms for querying a backend SQL database
     searchTimeoutRef.current = setTimeout(() => {
-      const query = searchTerm.trim().toLowerCase();
-      let matches: ProductPreset[] = [];
-
-      if (!query) {
-        // Show first 5 presets when empty query as quick recommendations
-        matches = productPresets.slice(0, 5);
-      } else {
-        matches = productPresets.filter(
-          (p) =>
-            p.name.toLowerCase().includes(query) ||
-            (p.spec && p.spec.toLowerCase().includes(query))
-        );
-      }
-
-      setSuggestions(matches);
-      setIsLoading(false);
-    }, 250);
+      void searchErpProducts(query, 15)
+        .then((items) => {
+          setSuggestions(items);
+          setError(null);
+        })
+        .catch((err: unknown) => {
+          setSuggestions([]);
+          setError(err instanceof Error ? err.message : '搜尋凌越貨品失敗');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }, 300);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,7 +140,7 @@ export default function ProductAutocomplete({
     triggerSearch(value);
   };
 
-  const handleSelect = (product: ProductPreset) => {
+  const handleSelect = (product: ErpProduct) => {
     onSelectProduct(product);
     setIsOpen(false);
   };
@@ -94,13 +157,13 @@ export default function ProductAutocomplete({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setHighlightedIndex((prev) => 
+        setHighlightedIndex((prev) =>
           suggestions.length > 0 ? (prev + 1) % suggestions.length : -1
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setHighlightedIndex((prev) => 
+        setHighlightedIndex((prev) =>
           suggestions.length > 0 ? (prev - 1 + suggestions.length) % suggestions.length : -1
         );
         break;
@@ -109,7 +172,6 @@ export default function ProductAutocomplete({
         if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
           handleSelect(suggestions[highlightedIndex]);
         } else if (suggestions.length > 0) {
-          // If none highlighted but suggestions exist, default to first suggestion
           handleSelect(suggestions[0]);
         }
         break;
@@ -123,9 +185,99 @@ export default function ProductAutocomplete({
     }
   };
 
+  const dropdownPanel =
+    isOpen && dropdownRect
+      ? createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed z-[200] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fadeIn"
+            style={{
+              top: dropdownRect.top,
+              left: dropdownRect.left,
+              width: dropdownRect.width,
+              maxHeight: 'min(70vh, 32rem)',
+            }}
+          >
+            <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 font-semibold shrink-0">
+              <span className="flex items-center gap-1.5">
+                <Database className="w-4 h-4 text-emerald-600" />
+                凌越 ERP 貨品搜尋
+              </span>
+              {isLoading ? (
+                <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  正在查詢...
+                </span>
+              ) : (
+                <span>共 {suggestions.length} 筆符合</span>
+              )}
+            </div>
+
+            <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
+              {error ? (
+                <div className="p-6 text-center text-sm text-rose-500">{error}</div>
+              ) : isLoading && suggestions.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                  <span>正在查詢凌越貨品主檔...</span>
+                </div>
+              ) : !value.trim() ? (
+                <div className="p-8 text-center text-sm text-slate-400">
+                  輸入品號或品名以搜尋凌越貨品
+                </div>
+              ) : suggestions.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-400">
+                  無相符的凌越貨品。可繼續輸入以使用自訂品項。
+                </div>
+              ) : (
+                suggestions.map((product, index) => (
+                  <button
+                    key={product.skuNo}
+                    type="button"
+                    onClick={() => handleSelect(product)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    className={`w-full text-left px-4 py-3.5 flex flex-col gap-1.5 transition-all text-sm cursor-pointer ${
+                      highlightedIndex === index
+                        ? 'bg-emerald-50 border-l-4 border-emerald-600 pl-3'
+                        : 'bg-white border-l-4 border-transparent pl-3 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <span className="font-semibold text-slate-900 leading-snug">
+                        {product.name}
+                      </span>
+                      <span className="text-xs text-slate-500 font-mono shrink-0 bg-slate-100 px-2 py-0.5 rounded">
+                        {product.skuNo}
+                      </span>
+                    </div>
+
+                    {product.spec && (
+                      <div className="text-xs text-slate-500 leading-relaxed line-clamp-2">
+                        {product.spec}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
+                        單位：{product.unit}
+                      </span>
+                      <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">
+                        單價請自行填寫
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="relative w-full" ref={containerRef}>
       <input
+        ref={inputRef}
         type="text"
         value={value}
         onChange={handleInputChange}
@@ -134,80 +286,7 @@ export default function ProductAutocomplete({
         placeholder={placeholder}
         className="w-full bg-transparent px-2 py-1.5 focus:bg-white border-b border-transparent focus:border-indigo-500 hover:border-slate-300 rounded focus:outline-none font-semibold text-slate-800 transition-all placeholder-slate-400"
       />
-
-      {isOpen && (
-        <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden max-h-64 flex flex-col animate-fadeIn">
-          {/* Header indicator simulating SQL DB source */}
-          <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold shrink-0">
-            <span className="flex items-center gap-1">
-              <Database className="w-3 h-3 text-indigo-500 animate-pulse" />
-              SQL 資料庫搜尋模擬 (連接已就緒)
-            </span>
-            {isLoading ? (
-              <span className="flex items-center gap-1 text-indigo-600 font-medium">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                正在查詢...
-              </span>
-            ) : (
-              <span>共 {suggestions.length} 筆符合</span>
-            )}
-          </div>
-
-          <div className="overflow-y-auto flex-1 divide-y divide-slate-50">
-            {isLoading && suggestions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-1.5">
-                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                <span>正在從遠端 SQL 資料庫進行模糊查詢...</span>
-              </div>
-            ) : suggestions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400">
-                無相符的產品。您可以繼續輸入以新增自訂品項。
-              </div>
-            ) : (
-              suggestions.map((product, index) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => handleSelect(product)}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  className={`w-full text-left px-3.5 py-2.5 flex flex-col transition-all text-xs cursor-pointer ${
-                    highlightedIndex === index
-                      ? 'bg-indigo-50/70 border-l-2 border-indigo-600 pl-[12px]'
-                      : 'bg-white'
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="font-semibold text-slate-800">
-                      {product.name}
-                    </span>
-                    <span className="font-bold text-emerald-600 font-mono shrink-0">
-                      ${product.price.toLocaleString()} 元
-                    </span>
-                  </div>
-                  
-                  {product.spec && (
-                    <div className="text-[10px] text-slate-400 mt-1 line-clamp-1">
-                      {product.spec}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 mt-1">
-                    <span className="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.2 rounded font-mono">
-                      單位: {product.unit}
-                    </span>
-                    {!value && index < 5 && (
-                      <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1 py-0.2 rounded font-semibold flex items-center gap-0.5">
-                        <Sparkles className="w-2.5 h-2.5" />
-                        常用推薦
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {dropdownPanel}
     </div>
   );
 }

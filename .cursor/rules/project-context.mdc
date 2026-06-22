@@ -21,13 +21,17 @@ alwaysApply: true
 - `src/components/` — UI 元件
 - `src/utils/` — Excel 匯出、預設資料等工具
 - `src/types.ts` — 全域 TypeScript 型別
+- `backend/` — 凌越 SOAP **唯讀**代理 API（`npm run dev:api`）
+- `scripts/ly_erp_probe.py` — 凌越連線探測腳本
 
-## 未來架構（尚未實作，勿假設已存在）
+## 現況與未來架構
 
-- **後端**：Python，負責核心運算、資料處理與 API
-- **資料庫**：Microsoft SQL Server（MSSQL）串接
-- 開始實作前須經 Noah 同意，並提供移轉計畫；不得擅自引入 Next.js、Zustand 或後端程式碼
-- 後端目錄建議預留 `backend/` 或 `api/`，Python 環境以 **uv** 管理（`uv venv` → `uv sync` / `uv run`）
+- **現況**：React SPA + `localStorage`；凌越整合為 **唯讀**（貨品搜尋 → 品項快選／品名自動完成）
+- **開發**：`npm run dev:api`（後端 :8000）+ `npm run dev`（前端 :3000）；凌越憑證在根目錄 `.env`
+- **規劃中**：PostgreSQL、帳號角色、凌越 **寫入**推送（Phase 4，須 Noah 同意）
+- **ERP 整合準則**：見 `.cursor/rules/erp-integration-architecture.mdc`（現階段禁止 `LyDataIn` 等寫入）
+- 不得擅自引入 Next.js、Zustand；擴充 PG 或凌越寫入前須經 Noah 同意並提供移轉計畫
+- 後端 Python 環境以 **uv** 管理（`backend/` 內 `uv sync` / `uv run`）
 
 ## AI 作業原則
 

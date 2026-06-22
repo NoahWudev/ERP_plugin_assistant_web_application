@@ -1,18 +1,28 @@
 import React from 'react';
 import { Quotation } from '../types';
 import { FileText, Trash, RefreshCw, Calendar, FileClock } from 'lucide-react';
-import { calculateQuotationTotals } from '../utils/excel';
+import { calculateQuotationTotals } from '../utils/quotationTotals';
 
 interface DraftListProps {
   drafts: Quotation[];
   onLoadDraft: (draft: Quotation) => void;
   onDeleteDraft: (id: string) => void;
+  /** 嵌入外層卡片時省略獨立外框與標題 */
+  embedded?: boolean;
 }
 
-export default function DraftList({ drafts, onLoadDraft, onDeleteDraft }: DraftListProps) {
+export default function DraftList({ drafts, onLoadDraft, onDeleteDraft, embedded = false }: DraftListProps) {
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5 flex flex-col h-full min-h-[300px]" id="draft-list-container">
-      <div className="flex items-center gap-2 mb-4">
+    <div
+      className={
+        embedded
+          ? 'flex flex-col flex-1 min-h-0 h-full'
+          : 'bg-white border border-slate-100 rounded-2xl shadow-xs p-5 flex flex-col h-full min-h-[300px]'
+      }
+      id="draft-list-container"
+    >
+      {!embedded && (
+      <div className="flex items-center gap-2 mb-4 shrink-0">
         <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
           <FileClock className="w-5 h-5" />
         </div>
@@ -21,8 +31,9 @@ export default function DraftList({ drafts, onLoadDraft, onDeleteDraft }: DraftL
           <p className="text-xs text-slate-400">登打進度自動儲存於此，點選可載入</p>
         </div>
       </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto space-y-2 max-h-[300px] pr-1">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-2 pr-1">
         {drafts.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-slate-100 rounded-xl bg-slate-50/50">
             <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />

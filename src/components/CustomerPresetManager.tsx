@@ -8,6 +8,8 @@ interface CustomerPresetManagerProps {
   onAdd: (newCustomer: Omit<CustomerPreset, 'id'>) => void;
   onDelete: (id: string) => void;
   selectedCustomerId?: string;
+  /** 嵌入外層卡片時省略獨立外框與標題 */
+  embedded?: boolean;
 }
 
 export default function CustomerPresetManager({
@@ -16,6 +18,7 @@ export default function CustomerPresetManager({
   onAdd,
   onDelete,
   selectedCustomerId,
+  embedded = false,
 }: CustomerPresetManagerProps) {
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -59,8 +62,16 @@ export default function CustomerPresetManager({
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden p-5 flex flex-col h-full min-h-[400px]" id="customer-preset-manager">
-      <div className="flex items-center justify-between mb-4">
+    <div
+      className={
+        embedded
+          ? 'flex flex-col flex-1 min-h-0 h-full'
+          : 'bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden p-5 flex flex-col h-full min-h-[400px]'
+      }
+      id="customer-preset-manager"
+    >
+      {!embedded && (
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
             <BookOpen className="w-5 h-5" />
@@ -93,9 +104,10 @@ export default function CustomerPresetManager({
           </button>
         )}
       </div>
+      )}
 
       {isAdding ? (
-        <form onSubmit={handleSubmit} className="space-y-4 bg-slate-50/70 p-4 rounded-xl border border-slate-100 animate-fadeIn" id="add-customer-form">
+        <form onSubmit={handleSubmit} className="space-y-4 bg-slate-50/70 p-4 rounded-xl border border-slate-100 animate-fadeIn flex-1 min-h-0 overflow-y-auto" id="add-customer-form">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-xs font-medium text-slate-500 mb-1">客戶公司全稱 *</label>
@@ -179,19 +191,32 @@ export default function CustomerPresetManager({
         </form>
       ) : (
         <>
-          <div className="relative mb-3">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="搜尋公司名 / 統一編號 / 聯絡窗口..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
-              id="inp-search-customers"
-            />
+          <div className={`shrink-0 mb-3 ${embedded ? 'flex items-center gap-2' : ''}`}>
+            <div className={`relative ${embedded ? 'flex-1 min-w-0' : ''}`}>
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="搜尋公司名 / 統一編號 / 聯絡窗口..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                id="inp-search-customers"
+              />
+            </div>
+            {embedded && (
+              <button
+                type="button"
+                onClick={() => setIsAdding(true)}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-2 rounded-lg transition-colors cursor-pointer shrink-0"
+                id="btn-add-customer-form"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                新增客戶
+              </button>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-2 pr-1">
             {filteredPresets.length === 0 ? (
               <div className="text-center py-8 text-xs text-slate-400">
                 無相符的客戶名單。您可以點按上方「新增客戶」自行建立！
@@ -199,6 +224,7 @@ export default function CustomerPresetManager({
             ) : (
               filteredPresets.map((customer) => {
                 const isSelected = selectedCustomerId === customer.id;
+                const isProtectedPreset = ['c1', 'c2', 'c3', 'c4'].includes(customer.id);
                 return (
                   <div
                     key={customer.id}
@@ -245,17 +271,20 @@ export default function CustomerPresetManager({
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Limit delete option for custom presets (id containing "custom") or anything except standard presets (c1, c2, c3, c4) to protect initial samples */}
-                        {!['c1', 'c2', 'c3', 'c4'].includes(customer.id) && (
-                          <button
-                            type="button"
-                            title="刪除"
-                            onClick={() => onDelete(customer.id)}
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-700 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer duration-200"
-                          >
-                            <Trash className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          title="刪除"
+                          onClick={() => onDelete(customer.id)}
+                          disabled={isProtectedPreset}
+                          tabIndex={isProtectedPreset ? -1 : 0}
+                          className={`p-1.5 rounded-lg transition-all duration-200 ${
+                            isProtectedPreset
+                              ? 'invisible pointer-events-none'
+                              : 'text-rose-500 hover:bg-rose-50 hover:text-rose-700 opacity-0 group-hover:opacity-100 cursor-pointer'
+                          }`}
+                        >
+                          <Trash className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   </div>

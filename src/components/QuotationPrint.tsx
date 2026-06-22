@@ -1,6 +1,6 @@
 import React from 'react';
 import { Quotation } from '../types';
-import { calculateQuotationTotals } from '../utils/excel';
+import { calculateQuotationTotals } from '../utils/quotationTotals';
 
 interface QuotationPrintProps {
   quotation: Quotation;
