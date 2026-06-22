@@ -144,6 +144,7 @@ export const DEFAULT_QUOTATION_TEMPLATE = (salesName: string = '王小明'): Quo
         subtotal: 43200,
       }
     ],
+    currency: 'TWD',
     discount: 5000,
     taxType: 'TAXABLE',
     remark: '1. 本報價單自發行之日起算有效期 30 天。\n2. 各專案項目交期於收到簽核報價單後 14 個工作天內啟動。\n3. 所有款項需加收 5% 營業稅。',

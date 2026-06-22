@@ -1,6 +1,7 @@
 import { Quotation, QuotationItem } from '../types';
 import type XlsxPopulateType from 'xlsx-populate';
 import { calculateQuotationTotals } from './quotationTotals';
+import { currencyExcelCode, normalizeCurrency } from './currency';
 import {
   COLUMN_D_NUMBER,
   COLUMN_D_WIDTH,
@@ -167,7 +168,7 @@ function fillHeaderCells(sheet: TemplateSheet, quotation: Quotation) {
   sheet.cell(HEADER_CELLS.customerFax).value('');
   sheet.cell(HEADER_CELLS.date).value(new Date(`${quotation.date}T00:00:00`));
   sheet.cell(HEADER_CELLS.quotationNo).value(quotation.quotationNo);
-  sheet.cell(HEADER_CELLS.currency).value('NT');
+  sheet.cell(HEADER_CELLS.currency).value(currencyExcelCode(normalizeCurrency(quotation.currency)));
   sheet.cell(HEADER_CELLS.paymentTerms).value(quotation.paymentTerms || '');
   sheet.cell(HEADER_CELLS.salesName).value(quotation.salesName || '');
 }

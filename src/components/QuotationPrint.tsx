@@ -1,6 +1,12 @@
 import React from 'react';
 import { Quotation } from '../types';
 import { calculateQuotationTotals } from '../utils/quotationTotals';
+import {
+  currencyDisplayCode,
+  formatAmount,
+  formatMoney,
+  normalizeCurrency,
+} from '../utils/currency';
 
 interface QuotationPrintProps {
   quotation: Quotation;
@@ -8,7 +14,8 @@ interface QuotationPrintProps {
 
 export default function QuotationPrint({ quotation }: QuotationPrintProps) {
   const totals = calculateQuotationTotals(quotation);
-  const taxLabel = 
+  const currency = normalizeCurrency(quotation.currency);
+  const taxLabel =
     quotation.taxType === 'TAXABLE' ? '應稅 (5%)' : 
     quotation.taxType === 'ZERO_TAX' ? '零稅率' : '免稅';
 
@@ -69,6 +76,10 @@ export default function QuotationPrint({ quotation }: QuotationPrintProps) {
             <span>自報價日起 {quotation.validDays} 天</span>
           </div>
           <div className="flex">
+            <span className="w-24 font-semibold text-slate-700 shrink-0">報價幣別:</span>
+            <span className="font-mono font-medium">{currencyDisplayCode(currency)}</span>
+          </div>
+          <div className="flex">
             <span className="w-24 font-semibold text-slate-700 shrink-0">業務人員:</span>
             <span className="font-medium">{quotation.salesName}</span>
           </div>
@@ -102,8 +113,8 @@ export default function QuotationPrint({ quotation }: QuotationPrintProps) {
             <th className="border border-slate-800 p-2">規格描述</th>
             <th className="border border-slate-800 p-2 text-center w-12">數量</th>
             <th className="border border-slate-800 p-2 text-center w-10">單位</th>
-            <th className="border border-slate-800 p-2 text-right w-20">單價</th>
-            <th className="border border-slate-800 p-2 text-right w-24">小計金額</th>
+            <th className="border border-slate-800 p-2 text-right w-20">單價 ({currencyDisplayCode(currency)})</th>
+            <th className="border border-slate-800 p-2 text-right w-24">小計 ({currencyDisplayCode(currency)})</th>
           </tr>
         </thead>
         <tbody>
@@ -114,8 +125,8 @@ export default function QuotationPrint({ quotation }: QuotationPrintProps) {
               <td className="border border-slate-800 p-2 text-slate-600 text-[11px] font-sans">{item.spec || '-'}</td>
               <td className="border border-slate-800 p-2 text-center font-mono">{item.qty}</td>
               <td className="border border-slate-800 p-2 text-center">{item.unit || '個'}</td>
-              <td className="border border-slate-800 p-2 text-right font-mono">${item.price.toLocaleString()}</td>
-              <td className="border border-slate-800 p-2 text-right font-mono">${(item.qty * item.price).toLocaleString()}</td>
+              <td className="border border-slate-800 p-2 text-right font-mono">{formatAmount(item.price, currency)}</td>
+              <td className="border border-slate-800 p-2 text-right font-mono">{formatAmount(item.qty * item.price, currency)}</td>
             </tr>
           ))}
           {/* Fill blank lines if the table is small to keep a standard grid size */}
@@ -150,19 +161,19 @@ export default function QuotationPrint({ quotation }: QuotationPrintProps) {
           <div className="border border-slate-805 rounded overflow-hidden">
             <div className="flex justify-between border-b border-slate-200 p-2">
               <span className="font-semibold text-slate-500">合計分計 (Subtotal):</span>
-              <span className="font-mono">${totals.subtotal.toLocaleString()}</span>
+              <span className="font-mono">{formatAmount(totals.subtotal, currency)}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200 p-2 text-rose-600">
               <span className="font-semibold">折扣折讓 (Discount):</span>
-              <span className="font-mono">-${totals.discount.toLocaleString()}</span>
+              <span className="font-mono">-{formatAmount(totals.discount, currency)}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200 p-2">
               <span className="font-semibold text-slate-500">營業稅別 ({taxLabel}):</span>
-              <span className="font-mono">${totals.tax.toLocaleString()}</span>
+              <span className="font-mono">{formatAmount(totals.tax, currency)}</span>
             </div>
             <div className="flex justify-between bg-zinc-800 text-white font-bold p-2 text-sm">
               <span>報價總計 (Grand Total):</span>
-              <span className="font-mono text-emerald-300 font-bold">${totals.grandTotal.toLocaleString()}</span>
+              <span className="font-mono text-emerald-300 font-bold">{formatMoney(totals.grandTotal, currency)}</span>
             </div>
           </div>
         </div>

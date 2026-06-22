@@ -2,6 +2,7 @@ import React from 'react';
 import { Quotation } from '../types';
 import { FileText, Trash, RefreshCw, Calendar, FileClock } from 'lucide-react';
 import { calculateQuotationTotals } from '../utils/quotationTotals';
+import { formatMoney, normalizeCurrency } from '../utils/currency';
 
 interface DraftListProps {
   drafts: Quotation[];
@@ -68,7 +69,7 @@ export default function DraftList({ drafts, onLoadDraft, onDeleteDraft, embedded
                       品項: {draft.items.length} 筆
                     </span>
                     <span className="text-blue-600 font-mono font-bold text-xs">
-                      ${totals.grandTotal.toLocaleString()} 元
+                      {formatMoney(totals.grandTotal, normalizeCurrency(draft.currency))}
                     </span>
                   </div>
                 </div>

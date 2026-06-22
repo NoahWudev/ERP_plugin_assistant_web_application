@@ -5,6 +5,12 @@ import {
   Building, CheckCircle2, AlertTriangle, FileText, ChevronRight, TrendingUp, Info
 } from 'lucide-react';
 import { calculateQuotationTotals } from '../utils/quotationTotals';
+import {
+  formatGrandSumKpi,
+  formatMoney,
+  normalizeCurrency,
+  sumGrandTotalsByCurrency,
+} from '../utils/currency';
 
 interface QuotationHistoryProps {
   history: Quotation[];
@@ -38,10 +44,8 @@ export default function QuotationHistory({
 
   // Calculate Metrics
   const totalCount = history.length;
-  const grandSum = history.reduce((sum, item) => {
-    const totals = calculateQuotationTotals(item);
-    return sum + (item.status === 'REJECTED' ? 0 : totals.grandTotal);
-  }, 0);
+  const grandTotalsByCurrency = sumGrandTotalsByCurrency(history);
+  const grandSumKpi = formatGrandSumKpi(grandTotalsByCurrency);
 
   const pendingCount = history.filter(q => q.status === 'SENT').length;
   const acceptedCount = history.filter(q => q.status === 'ACCEPTED').length;
@@ -98,7 +102,7 @@ export default function QuotationHistory({
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">合計報價總金額</span>
             <span className="text-xl font-extrabold text-emerald-600 font-mono block mt-0.5">
-              ${grandSum.toLocaleString()} 元
+              {grandSumKpi}
             </span>
           </div>
           <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -224,7 +228,7 @@ export default function QuotationHistory({
 
                       {/* Total value */}
                       <td className="p-4 text-right font-mono font-extrabold text-sm text-indigo-600">
-                        ${totals.grandTotal.toLocaleString()} TWD
+                        {formatMoney(totals.grandTotal, normalizeCurrency(quote.currency))}
                       </td>
 
                       {/* Status Tag */}

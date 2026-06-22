@@ -11,6 +11,9 @@ export interface QuotationItem {
 
 export type TaxType = 'TAXABLE' | 'TAX_FREE' | 'ZERO_TAX'; // 5% 應稅, 免稅, 零稅率
 
+/** 報價幣別（plugin_only） */
+export type QuotationCurrency = 'TWD' | 'USD';
+
 export interface CustomerPreset {
   id: string;
   companyName: string;
@@ -57,6 +60,7 @@ export interface Quotation {
 
   // 品項與金額
   items: QuotationItem[];
+  currency: QuotationCurrency; // plugin_only
   discount: number;       // 折扣金額
   taxType: TaxType;      // 稅別
   remark: string;        // 備註

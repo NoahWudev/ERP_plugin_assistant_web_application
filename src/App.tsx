@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Quotation, QuotationItem, CustomerPreset, ProductPreset, ErpProduct, TaxType } from './types';
+import { Quotation, QuotationItem, CustomerPreset, ProductPreset, ErpProduct, TaxType, QuotationCurrency } from './types';
 import { 
   Plus, Trash, ArrowUp, ArrowDown, Save, FileSpreadsheet, Printer, 
   RotateCcw, Building, FileText, Check, PlusCircle, 
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { exportQuotationToExcel } from './utils/excel';
 import { calculateQuotationTotals } from './utils/quotationTotals';
+import { currencyLabel, formatMoney, normalizeQuotation } from './utils/currency';
 import { 
   DEFAULT_CUSTOMERS, DEFAULT_PRODUCTS, DEFAULT_QUOTATION_TEMPLATE, generateQuotationNo 
 } from './utils/presets';
@@ -44,7 +45,7 @@ export default function App() {
   const [quotation, setQuotation] = useState<Quotation>(() => {
     const saved = localStorage.getItem('erp_current_quotation');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+      try { return normalizeQuotation(JSON.parse(saved)); } catch (e) { /* ignore */ }
     }
     return DEFAULT_QUOTATION_TEMPLATE();
   });
@@ -68,7 +69,9 @@ export default function App() {
   const [drafts, setDrafts] = useState<Quotation[]>(() => {
     const saved = localStorage.getItem('erp_drafts_history');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+      try {
+        return (JSON.parse(saved) as Quotation[]).map(normalizeQuotation);
+      } catch (e) { /* ignore */ }
     }
     return [];
   });
@@ -341,7 +344,7 @@ export default function App() {
   };
 
   const handleLoadDraft = (draft: Quotation) => {
-    setQuotation(draft);
+    setQuotation(normalizeQuotation(draft));
     showToast(`已成功載入草稿單：${draft.quotationNo}`);
   };
 
@@ -356,7 +359,7 @@ export default function App() {
   };
 
   const handleLoadForEdit = (quote: Quotation) => {
-    setQuotation(quote);
+    setQuotation(normalizeQuotation(quote));
     setActiveMainTab('editor');
     showToast(`已載入單號 [${quote.quotationNo}]。修改完畢後可點選上方「儲存存檔」覆蓋或新增。`, 'success');
   };
@@ -868,7 +871,7 @@ export default function App() {
                       <th className="py-2.5 px-3">規格或功能描述</th>
                       <th className="py-2.5 px-3 text-center w-16">數量 *</th>
                       <th className="py-2.5 px-3 text-center w-16">單位</th>
-                      <th className="py-2.5 px-3 text-right w-24">單價 (元) *</th>
+                      <th className="py-2.5 px-3 text-right w-24">單價 ({currencyLabel(quotation.currency)}) *</th>
                       <th className="py-2.5 px-3 text-right w-24">小計金額</th>
                       <th className="py-2.5 px-2 text-center w-12">動作</th>
                     </tr>
@@ -1050,7 +1053,19 @@ export default function App() {
                   自動結算與折讓
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                  <div>
+                    <span className="text-xs text-slate-400 block mb-1">報價幣別</span>
+                    <select
+                      value={quotation.currency}
+                      onChange={(e) => updateField('currency', e.target.value as QuotationCurrency)}
+                      className="text-xs font-semibold bg-slate-800 text-white border border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer w-full"
+                    >
+                      <option value="TWD">新台幣 (TWD)</option>
+                      <option value="USD">美金 (USD)</option>
+                    </select>
+                  </div>
+
                   <div>
                     <span className="text-xs text-slate-400 block mb-1">稅別設定</span>
                     <select
@@ -1065,7 +1080,9 @@ export default function App() {
                   </div>
 
                   <div>
-                    <span className="text-xs text-slate-400 block mb-1">手動折扣金額 (TWD)</span>
+                    <span className="text-xs text-slate-400 block mb-1">
+                      手動折扣金額 ({currencyLabel(quotation.currency)})
+                    </span>
                     <div className="flex items-center gap-1 bg-slate-800 rounded-lg px-2 border border-slate-700">
                       <span className="text-slate-400 font-mono text-xs font-semibold">-</span>
                       <input
@@ -1085,21 +1102,21 @@ export default function App() {
               <div className="w-full md:w-auto bg-slate-800/80 p-5 rounded-xl border border-slate-800 self-stretch flex flex-col justify-center gap-2">
                 <div className="flex justify-between md:justify-end gap-x-8 items-center text-xs text-slate-300">
                   <span>分計小計 (Subtotal):</span>
-                  <span className="font-mono font-medium">${totals.subtotal.toLocaleString()} 元</span>
+                  <span className="font-mono font-medium">{formatMoney(totals.subtotal, quotation.currency)}</span>
                 </div>
                 <div className="flex justify-between md:justify-end gap-x-8 items-center text-xs text-rose-300">
                   <span>折扣減免 (Discount):</span>
-                  <span className="font-mono font-medium">-${totals.discount.toLocaleString()} 元</span>
+                  <span className="font-mono font-medium">-{formatMoney(totals.discount, quotation.currency)}</span>
                 </div>
                 <div className="flex justify-between md:justify-end gap-x-8 items-center text-xs text-slate-300">
                   <span>加計營業稅額 (VAT):</span>
-                  <span className="font-mono font-medium">${totals.tax.toLocaleString()} 元</span>
+                  <span className="font-mono font-medium">{formatMoney(totals.tax, quotation.currency)}</span>
                 </div>
                 <div className="h-[1px] bg-slate-700 my-1"></div>
                 <div className="flex justify-between md:justify-end gap-x-8 items-center">
                   <span className="text-sm font-bold text-slate-100">報價總金額 (Total):</span>
                   <span className="text-xl font-bold font-mono text-emerald-400 tracking-tight">
-                    ${totals.grandTotal.toLocaleString()} 元
+                    {formatMoney(totals.grandTotal, quotation.currency)}
                   </span>
                 </div>
               </div>
