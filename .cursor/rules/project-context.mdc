@@ -5,32 +5,37 @@ alwaysApply: true
 
 # ERP 報價快速打單助手
 
-輕量化報價單管理系統：離線自動存檔、品項動態編輯、即時金額計算、Excel 匯出與 PDF/列印。
+輕量化報價單管理系統：登入後伺服器端存檔、品項動態編輯、即時金額計算、Excel 匯出與 PDF/列印。
 
 ## 現況技術棧（以此為準開發）
 
 - **前端**：React 19 + TypeScript + Vite 6
 - **樣式**：Tailwind CSS v4（`@tailwindcss/vite`）
 - **工具庫**：SheetJS (`xlsx`)、Lucide React、Motion
-- **狀態管理**：React 元件內 state（`src/App.tsx`），尚未使用 Zustand
-- **開發**：`nvm use` → `npm install` → `npm run dev`（port 3000，需 Node.js >= 20，見 `.nvmrc`）
+- **狀態管理**：React 元件內 state（`src/App.tsx`）+ `AuthContext`，尚未使用 Zustand
+- **後端**：FastAPI + PostgreSQL（`docker compose`）；Alembic migration
+- **開發**：`nvm use` → `npm install` → `npm run db:up` → `npm run dev:api` + `npm run dev`（需 Node.js >= 20，見 `.nvmrc`）
 
 ## 關鍵目錄
 
 - `src/App.tsx` — 主頁面與狀態管理
+- `src/contexts/AuthContext.tsx` — 登入狀態
 - `src/components/` — UI 元件
-- `src/utils/` — Excel 匯出、預設資料等工具
-- `src/types.ts` — 全域 TypeScript 型別
-- `backend/` — 凌越 SOAP **唯讀**代理 API（`npm run dev:api`）
+- `src/utils/` — Excel 匯出、API 封裝等工具
+- `src/types.ts` — 全域 TypeScript 型別（含欄位分類註解）
+- `backend/` — FastAPI（報價 CRUD、帳號、凌越 SOAP **唯讀**代理）
+- `backend/alembic/` — 資料庫 schema 版本
+- `scripts/seed_admin.py` — 角色／權限／admin 種子
 - `scripts/ly_erp_probe.py` — 凌越連線探測腳本
 
 ## 現況與未來架構
 
-- **現況**：React SPA + `localStorage`；凌越整合為 **唯讀**（貨品搜尋 → 品項快選／品名自動完成）
-- **開發**：`npm run dev:api`（後端 :8000）+ `npm run dev`（前端 :3000）；凌越憑證在根目錄 `.env`
-- **規劃中**：PostgreSQL、帳號角色、凌越 **寫入**推送（Phase 4，須 Noah 同意）
+- **現況**：React SPA + **PostgreSQL** + JWT 登入；凌越整合為 **唯讀**（凌越貨品搜尋、品名自動完成）
+- **存檔**：須登入且後端可連線；按「儲存本單／存檔」寫入 DB。編輯中內容在瀏覽器 memory，**未按儲存前不會進 PostgreSQL**（舊版 localStorage 自動存檔已移除；首次登入可一次性匯入舊本機資料）
+- **開發**：`docker compose up -d`（PG :5432）+ `npm run dev:api`（:8000）+ `npm run dev`（:3000）；凌越與 DB 憑證在根目錄 `.env`
+- **規劃中**：凌越客戶主檔唯讀、凌越 **寫入**推送（Phase 4，須 Noah 同意）
 - **ERP 整合準則**：見 `.cursor/rules/erp-integration-architecture.mdc`（現階段禁止 `LyDataIn` 等寫入）
-- 不得擅自引入 Next.js、Zustand；擴充 PG 或凌越寫入前須經 Noah 同意並提供移轉計畫
+- 不得擅自引入 Next.js、Zustand；擴充凌越寫入前須經 Noah 同意並提供移轉計畫
 - 後端 Python 環境以 **uv** 管理（`backend/` 內 `uv sync` / `uv run`）
 
 ## AI 作業原則

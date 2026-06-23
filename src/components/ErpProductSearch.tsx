@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { ErpProduct } from '../types';
 import { searchErpProducts } from '../utils/erpProducts';
-import { Plus, Search, ArrowRight, Package, Loader2, AlertCircle } from 'lucide-react';
+import { Search, ArrowRight, Package, Loader2, AlertCircle } from 'lucide-react';
 
-interface ProductPresetManagerProps {
+interface ErpProductSearchProps {
   onAddProductToQuote: (product: ErpProduct, customQty: number) => void;
   /** 嵌入外層卡片時省略獨立外框與標題 */
   embedded?: boolean;
 }
 
-export default function ProductPresetManager({
+export default function ErpProductSearch({
   onAddProductToQuote,
   embedded = false,
-}: ProductPresetManagerProps) {
+}: ErpProductSearchProps) {
   const [search, setSearch] = useState('');
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [results, setResults] = useState<ErpProduct[]>([]);
@@ -49,14 +49,14 @@ export default function ProductPresetManager({
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const handleQtyChange = (skuNo: string, value: number) => {
+  const handleQtyChange = (key: string, value: number) => {
     setQtys((prev) => ({
       ...prev,
-      [skuNo]: Math.max(1, value),
+      [key]: Math.max(1, value),
     }));
   };
 
-  const getQty = (skuNo: string) => qtys[skuNo] || 1;
+  const getQty = (key: string) => qtys[key] || 1;
 
   return (
     <div
@@ -65,7 +65,7 @@ export default function ProductPresetManager({
           ? 'flex flex-col flex-1 min-h-0 h-full'
           : 'bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden p-5 flex flex-col h-full min-h-[400px]'
       }
-      id="product-preset-manager"
+      id="erp-product-search"
     >
       {!embedded && (
         <div className="flex items-center justify-between mb-4 shrink-0">
@@ -75,13 +75,13 @@ export default function ProductPresetManager({
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 text-base">凌越貨品搜尋</h3>
-              <p className="text-xs text-slate-400">輸入品號或品名，加入報價清單（單價請於左側自行填寫）</p>
+              <p className="text-xs text-slate-400">從凌越 ERP 貨品主檔查詢並加入報價</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className={`shrink-0 mb-3 ${embedded ? '' : ''}`}>
+      <div className="shrink-0 mb-3">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
           <input
@@ -128,16 +128,12 @@ export default function ProductPresetManager({
                 className="p-3 bg-white hover:bg-slate-50/50 rounded-xl border border-slate-100 hover:border-emerald-200 transition-all text-left flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-xs text-slate-800 truncate">
-                    {product.name}
-                  </div>
+                  <div className="font-semibold text-xs text-slate-800 truncate">{product.name}</div>
                   <div className="text-[10px] text-slate-500 mt-0.5 font-mono truncate">
                     品號：{product.skuNo}
                   </div>
                   {product.spec && (
-                    <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
-                      {product.spec}
-                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{product.spec}</div>
                   )}
                   <div className="flex items-center mt-1 gap-2">
                     <span className="text-[10px] bg-slate-100 text-slate-500 scale-95 px-1.5 py-0.2 rounded shrink-0">
@@ -145,7 +141,6 @@ export default function ProductPresetManager({
                     </span>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                   <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
                     <button
@@ -170,7 +165,6 @@ export default function ProductPresetManager({
                       +
                     </button>
                   </div>
-
                   <button
                     type="button"
                     title="新增品項至報價單"
@@ -181,7 +175,7 @@ export default function ProductPresetManager({
                     className="p-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1 text-[11px] font-medium shadow-2xs hover:shadow-xs transition-all cursor-pointer"
                   >
                     加入
-                    <ArrowRight className="w-3" />
+                    <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -189,13 +183,6 @@ export default function ProductPresetManager({
           })
         )}
       </div>
-
-      {!embedded && (
-        <div className="shrink-0 pt-3 mt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1">
-          <Plus className="w-3 h-3" />
-          加入後請於報價清單自行輸入單價
-        </div>
-      )}
     </div>
   );
 }

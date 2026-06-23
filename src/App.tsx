@@ -3,22 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Quotation, QuotationItem, CustomerPreset, ProductPreset, ErpProduct, TaxType, QuotationCurrency } from './types';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Quotation, QuotationItem, CustomerPreset, ErpProduct, TaxType, QuotationCurrency } from './types';
 import { 
   Plus, Trash, ArrowUp, ArrowDown, Save, FileSpreadsheet, Printer, 
   RotateCcw, Building, FileText, Check, PlusCircle, 
   AlertCircle, Phone, Mail, User, MapPin, Hash, Calendar, 
-  HelpCircle, Info, ChevronRight, Contact, DollarSign, Edit3, FolderOpen
+  HelpCircle, Info, ChevronRight, Contact, DollarSign, Edit3, FolderOpen, LogOut, Shield
 } from 'lucide-react';
 import { exportQuotationToExcel } from './utils/excel';
 import { calculateQuotationTotals } from './utils/quotationTotals';
 import { currencyLabel, formatMoney, normalizeQuotation } from './utils/currency';
 import { 
-  DEFAULT_CUSTOMERS, DEFAULT_PRODUCTS, DEFAULT_QUOTATION_TEMPLATE, generateQuotationNo 
+  DEFAULT_QUOTATION_TEMPLATE, generateQuotationNo 
 } from './utils/presets';
+import {
+  clearLegacyLocalStorage,
+  createCustomerPreset,
+  createQuotation,
+  deleteCustomerPreset,
+  deleteQuotation,
+  fetchCustomerPresets,
+  fetchQuotations,
+  hasLegacyLocalStorage,
+  migrateLocalStorage,
+  readLegacyLocalStorage,
+  updateQuotation,
+} from './utils/quotationApi';
+import { useAuth } from './contexts/AuthContext';
 import CustomerPresetManager from './components/CustomerPresetManager';
-import ProductPresetManager from './components/ProductPresetManager';
+import ErpProductSearch from './components/ErpProductSearch';
 import ProductAutocomplete from './components/ProductAutocomplete';
 import DraftList from './components/DraftList';
 import QuotationPrint from './components/QuotationPrint';
@@ -40,41 +54,14 @@ function getItemsTableScrollHeight(itemCount: number): number {
   return Math.min(contentHeight, ITEMS_TABLE_MAX_HEIGHT);
 }
 
-export default function App() {
-  // --- Persistent States ---
-  const [quotation, setQuotation] = useState<Quotation>(() => {
-    const saved = localStorage.getItem('erp_current_quotation');
-    if (saved) {
-      try { return normalizeQuotation(JSON.parse(saved)); } catch (e) { /* ignore */ }
-    }
-    return DEFAULT_QUOTATION_TEMPLATE();
-  });
+export default function App({ onOpenAdmin }: { onOpenAdmin?: () => void }) {
+  const { user, logout } = useAuth();
 
-  const [customerPresets, setCustomerPresets] = useState<CustomerPreset[]>(() => {
-    const saved = localStorage.getItem('erp_customer_presets');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return DEFAULT_CUSTOMERS;
-  });
-
-  const [productPresets, setProductPresets] = useState<ProductPreset[]>(() => {
-    const saved = localStorage.getItem('erp_product_presets');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return DEFAULT_PRODUCTS;
-  });
-
-  const [drafts, setDrafts] = useState<Quotation[]>(() => {
-    const saved = localStorage.getItem('erp_drafts_history');
-    if (saved) {
-      try {
-        return (JSON.parse(saved) as Quotation[]).map(normalizeQuotation);
-      } catch (e) { /* ignore */ }
-    }
-    return [];
-  });
+  // --- Persistent States (API-backed) ---
+  const [quotation, setQuotation] = useState<Quotation>(() => DEFAULT_QUOTATION_TEMPLATE(user?.displayName));
+  const [customerPresets, setCustomerPresets] = useState<CustomerPreset[]>([]);
+  const [drafts, setDrafts] = useState<Quotation[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   // --- UI States ---
   const [activeMainTab, setActiveMainTab] = useState<'editor' | 'history'>('editor');
@@ -90,7 +77,7 @@ export default function App() {
     [quotation.items.length]
   );
 
-  // 品項快選側欄高度跟隨報價品項編輯清單卡片（桌面版）
+  // 凌越貨品搜尋側欄高度跟隨報價品項編輯清單卡片（桌面版）
   useEffect(() => {
     const el = itemsEditorCardRef.current;
     if (!el || activeMainTab !== 'editor') return;
@@ -138,29 +125,63 @@ export default function App() {
     };
   }, [activeMainTab]);
 
-  // Auto-save current progress so they never lose work
-  useEffect(() => {
-    localStorage.setItem('erp_current_quotation', JSON.stringify(quotation));
-  }, [quotation]);
-
-  // Persist presets and drafts list when changed
-  useEffect(() => {
-    localStorage.setItem('erp_customer_presets', JSON.stringify(customerPresets));
-  }, [customerPresets]);
-
-  useEffect(() => {
-    localStorage.setItem('erp_product_presets', JSON.stringify(productPresets));
-  }, [productPresets]);
-
-  useEffect(() => {
-    localStorage.setItem('erp_drafts_history', JSON.stringify(drafts));
-  }, [drafts]);
-
-  // Toast Helper
-  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
+
+  const loadRemoteData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const [quotes, customers] = await Promise.all([
+        fetchQuotations(),
+        fetchCustomerPresets(),
+      ]);
+      setDrafts(quotes.map(normalizeQuotation));
+      setCustomerPresets(customers);
+      setQuotation((prev) => {
+        if (prev.id && prev.id !== 'draft-template') return prev;
+        return DEFAULT_QUOTATION_TEMPLATE(user?.displayName);
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '載入資料失敗';
+      showToast(message, 'error');
+    } finally {
+      setDataLoading(false);
+    }
+  }, [user?.displayName, showToast]);
+
+  useEffect(() => {
+    void loadRemoteData();
+  }, [loadRemoteData]);
+
+  useEffect(() => {
+    if (!hasLegacyLocalStorage()) return;
+    const legacy = readLegacyLocalStorage();
+    const shouldImport = confirm(
+      '偵測到瀏覽器本機舊版報價資料，是否匯入至您目前所屬的業務小組？'
+    );
+    if (!shouldImport) return;
+
+    void (async () => {
+      try {
+        const result = await migrateLocalStorage({
+          currentQuotation: legacy.currentQuotation,
+          customerPresets: legacy.customerPresets,
+          draftsHistory: legacy.draftsHistory,
+        });
+        clearLegacyLocalStorage();
+        await loadRemoteData();
+        showToast(
+          `已匯入 ${result.quotations} 筆報價、${result.customer_presets} 筆客戶快選`,
+          'success'
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '匯入失敗';
+        showToast(message, 'error');
+      }
+    })();
+  }, [loadRemoteData, showToast]);
 
   // --- Core Handlers ---
   
@@ -200,7 +221,6 @@ export default function App() {
     };
 
     setQuotation(prev => {
-      // If template contains placeholders, or empty items, keep them, but append.
       const updatedItems = [...prev.items, newItem];
       return {
         ...prev,
@@ -290,57 +310,46 @@ export default function App() {
   };
 
   // 5. Presets management
-  const handleAddCustomerPreset = (newCustomer: Omit<CustomerPreset, 'id'>) => {
-    const entry: CustomerPreset = {
-      ...newCustomer,
-      id: `custom-client-${Date.now()}`
-    };
-    setCustomerPresets(prev => [entry, ...prev]);
-    showToast(`新增常用客戶「${newCustomer.companyName}」成功！`);
+  const handleAddCustomerPreset = async (newCustomer: Omit<CustomerPreset, 'id'>) => {
+    try {
+      const entry = await createCustomerPreset(newCustomer);
+      setCustomerPresets((prev) => [entry, ...prev]);
+      showToast(`新增常用客戶「${newCustomer.companyName}」成功！`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '新增失敗', 'error');
+    }
   };
 
-  const handleDeleteCustomerPreset = (id: string) => {
-    setCustomerPresets(prev => prev.filter(c => c.id !== id));
-    showToast('已移除常用客戶資訊', 'info');
+  const handleDeleteCustomerPreset = async (id: string) => {
+    try {
+      await deleteCustomerPreset(id);
+      setCustomerPresets((prev) => prev.filter((c) => c.id !== id));
+      showToast('已移除常用客戶資訊', 'info');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '刪除失敗', 'error');
+    }
   };
 
-  const handleAddProductPreset = (newProduct: Omit<ProductPreset, 'id'>) => {
-    const entry: ProductPreset = {
-      ...newProduct,
-      id: `custom-prod-${Date.now()}`
-    };
-    setProductPresets(prev => [entry, ...prev]);
-    showToast(`新增常用產品品項：「${newProduct.name}」成功！`);
-  };
-
-  const handleDeleteProductPreset = (id: string) => {
-    setProductPresets(prev => prev.filter(p => p.id !== id));
-    showToast('已從常用資料庫移除該品項', 'info');
-  };
-
-  // 6. Draft & History management
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (!quotation.customerName.trim()) {
       showToast('建議輸入客戶名稱，以利於歷史列表中搜尋識別。', 'info');
     }
 
-    // Preserve the existing ID to avoid duplicate rows, or generate a fresh unique ID
-    const isNew = !quotation.id || quotation.id === 'draft-template';
-    const finalId = isNew ? `draft-${Date.now()}` : quotation.id;
+    try {
+      const isNew = !quotation.id || quotation.id === 'draft-template';
+      const savedRecord = isNew
+        ? await createQuotation(quotation)
+        : await updateQuotation(quotation);
 
-    const savedRecord: Quotation = {
-      ...quotation,
-      id: finalId,
-    };
-
-    setDrafts(prev => {
-      const filtered = prev.filter(d => d.id !== finalId && d.id !== 'draft-template');
-      return [savedRecord, ...filtered];
-    });
-
-    // Update the active state to refer to this persistent record ID
-    setQuotation(savedRecord);
-    showToast(`已儲存報價單至歷史存檔 (單號: ${quotation.quotationNo})！`, 'success');
+      setDrafts((prev) => {
+        const filtered = prev.filter((d) => d.id !== savedRecord.id);
+        return [savedRecord, ...filtered];
+      });
+      setQuotation(normalizeQuotation(savedRecord));
+      showToast(`已儲存報價單至歷史存檔 (單號: ${savedRecord.quotationNo})！`, 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '儲存失敗', 'error');
+    }
   };
 
   const handleLoadDraft = (draft: Quotation) => {
@@ -348,14 +357,29 @@ export default function App() {
     showToast(`已成功載入草稿單：${draft.quotationNo}`);
   };
 
-  const handleDeleteDraft = (id: string) => {
-    setDrafts(prev => prev.filter(d => d.id !== id));
-    showToast('該草稿已被移除', 'info');
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      await deleteQuotation(id);
+      setDrafts((prev) => prev.filter((d) => d.id !== id));
+      showToast('該草稿已被移除', 'info');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '刪除失敗', 'error');
+    }
   };
 
-  const handleUpdateStatus = (id: string, status: Quotation['status']) => {
-    setDrafts(prev => prev.map(q => q.id === id ? { ...q, status } : q));
-    showToast('報價狀態已更新！', 'success');
+  const handleUpdateStatus = async (id: string, status: Quotation['status']) => {
+    const target = drafts.find((q) => q.id === id);
+    if (!target) return;
+    try {
+      const updated = await updateQuotation({ ...target, status });
+      setDrafts((prev) => prev.map((q) => (q.id === id ? updated : q)));
+      if (quotation.id === id) {
+        setQuotation(normalizeQuotation(updated));
+      }
+      showToast('報價狀態已更新！', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '更新失敗', 'error');
+    }
   };
 
   const handleLoadForEdit = (quote: Quotation) => {
@@ -376,10 +400,10 @@ export default function App() {
 
   const handleClearForm = () => {
     if (confirm('確定要清空當前欄位，重啟一張新的報價單嗎？（原草稿不會受影響）')) {
-      const defaultQuote = DEFAULT_QUOTATION_TEMPLATE(quotation.salesName);
+      const defaultQuote = DEFAULT_QUOTATION_TEMPLATE(quotation.salesName || user?.displayName);
       setQuotation({
         ...defaultQuote,
-        quotationNo: generateQuotationNo(), // generate fresh number
+        quotationNo: generateQuotationNo(),
       });
       showToast('已重設並開啟新報價單！', 'info');
     }
@@ -455,6 +479,32 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {user && (
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 mr-1">
+                <User className="w-3.5 h-3.5" />
+                <span className="font-semibold text-slate-700">{user.displayName}</span>
+                <span className="text-slate-400">({user.username})</span>
+              </div>
+            )}
+            {onOpenAdmin && (
+              <button
+                type="button"
+                onClick={onOpenAdmin}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-violet-700 hover:text-violet-900 bg-violet-50 hover:bg-violet-100 rounded-xl transition-all cursor-pointer"
+                title="系統管理（僅管理員）"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                管理
+              </button>
+            )}
+            <button
+              onClick={() => void logout()}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+              title="登出"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              登出
+            </button>
             <button
               onClick={handleClearForm}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold font-sans text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
@@ -538,7 +588,9 @@ export default function App() {
 
       {/* --- Main Dashboard Container --- */}
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 no-print" id="erp-main-content">
-        {activeMainTab === 'editor' ? (
+        {dataLoading ? (
+          <div className="text-center text-sm text-slate-500 py-16">資料載入中…</div>
+        ) : activeMainTab === 'editor' ? (
           <div className="space-y-6" id="editor-layout">
 
           {/* Row 1: 基本報價資訊 ↔ 客戶儲藏 / 暫存草稿 */}
@@ -813,7 +865,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Row 2: 報價品項編輯清單 ↔ 品項快選 */}
+          {/* Row 2: 報價品項編輯清單 ↔ 凌越貨品搜尋 */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-8" id="items-editor-panel">
             {/* Form Sheet 2: Items Table Editor */}
@@ -883,7 +935,7 @@ export default function App() {
                           <AlertCircle className="w-5 h-5 mx-auto mb-2 text-slate-300" />
                           <p className="font-semibold text-slate-600">無任何報價品項</p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            請在右方點選「品項快選」直接加載，或點按上方「插入一筆空列」手動輸入。
+                            請在右方「凌越貨品搜尋」加入品項，或點按上方「插入一筆空列」手動輸入。
                           </p>
                         </td>
                       </tr>
@@ -1021,18 +1073,18 @@ export default function App() {
 
             <div
               className="lg:col-span-4 min-h-0"
-              id="product-presets-sidebar"
+              id="erp-product-sidebar"
               style={itemsEditorCardHeight ? { height: itemsEditorCardHeight } : undefined}
             >
               <div className="bg-white rounded-2xl border border-slate-200 shadow-3xs p-6 h-full flex flex-col min-h-0 overflow-hidden">
                 <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-100 gap-2 mb-4">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-600"></div>
-                    <h3 className="font-bold text-slate-900 text-sm tracking-wide">品項快選</h3>
+                    <h3 className="font-bold text-slate-900 text-sm tracking-wide">凌越貨品搜尋</h3>
                   </div>
                 </div>
                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                  <ProductPresetManager
+                  <ErpProductSearch
                     embedded
                     onAddProductToQuote={handleAddProductToQuote}
                   />

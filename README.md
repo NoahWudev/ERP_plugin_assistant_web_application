@@ -81,7 +81,7 @@ erp-assistant/
 │   ├── types.ts         # 全域 TypeScript 介面定義
 │   ├── components/      # UI 元件目錄
 │   │   ├── CustomerPresetManager.tsx   # 常用客戶管理面板
-│   │   ├── ProductPresetManager.tsx    # 常用產品管理面板
+│   │   ├── ErpProductSearch.tsx        # 凌越貨品搜尋側欄
 │   │   ├── DraftList.tsx               # 暫存草稿箱元件
 │   │   ├── QuotationHistory.tsx        # 歷史單據列表與 KPI 指標
 │   │   └── QuotationPrint.tsx          # 列印專用報價單版面
